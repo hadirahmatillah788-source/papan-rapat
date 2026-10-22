@@ -1,0 +1,111 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  KARYAWAN
+}
+
+enum StatusPengumuman {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum TipeSukuBunga {
+  KONVENSIONAL
+  SYARIAH
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  name         String
+  password     String
+  role         Role          @default(KARYAWAN)
+  department   String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  pengumuman   Pengumuman[]
+
+  @@map("users")
+}
+
+model Pengumuman {
+  id               String           @id @default(cuid())
+  judul            String
+  nomorRapat       String?
+  tanggalRapat     DateTime
+  lokasi           String?
+  kategori         String           // e.g., "Manajemen", "ALCO / Treasury", "HR / SDM", "Operasional", "Kredit"
+  status           StatusPengumuman @default(DRAFT)
+  isAktif          Boolean          @default(true) // true = Aktif / Berlaku, false = Non-Aktif / Telah Diperbarui
+  keteranganStatus String?          // Catatan pembaruan, misal "Diperbarui oleh SK No. 014/ALCO/X/2026"
+  ringkasan        String?          @db.Text
+  isiKeputusan     String           @db.Text // Mendukung Paragraf & Tabel (Rich Content / Markdown)
+  isDeleted        Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  authorId         String
+  author           User             @relation(fields: [authorId], references: [id])
+  lampiran         Lampiran[]
+
+  @@index([tanggalRapat])
+  @@index([kategori])
+  @@index([status])
+  @@index([isAktif])
+  @@map("pengumuman")
+}
+
+model Lampiran {
+  id           String      @id @default(cuid())
+  namaFile     String
+  fileUrl      String      // Link Google Drive
+  driveFileId  String?     // ID file Google Drive untuk penampil iframe view-only
+  keterangan   String?
+  createdAt    DateTime    @default(now())
+
+  pengumumanId String
+  pengumuman   Pengumuman  @relation(fields: [pengumumanId], references: [id], onDelete: Cascade)
+
+  @@map("lampiran")
+}
+
+model SubTabProduk {
+  id          String            @id @default(cuid())
+  tipe        TipeSukuBunga     @default(KONVENSIONAL)
+  nama        String            // e.g. "Kredit Produktif", "Tabungan", "Deposito"
+  slug        String            // e.g. "kredit-produktif"
+  urutan      Int               @default(0)
+  deskripsi   String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  barisRates  BarisSukuBunga[]
+
+  @@unique([tipe, slug])
+  @@map("sub_tab_produk")
+}
+
+model BarisSukuBunga {
+  id             String        @id @default(cuid())
+  subTabId       String
+  subTab         SubTabProduk  @relation(fields: [subTabId], references: [id], onDelete: Cascade)
+  namaProduk     String        // e.g. "Kredit Modal Kerja", "Kredit Investasi"
+  tenorTiering   String        // e.g. "1 - 3 Tahun", ">= Rp 1 Milyar"
+  ratePersen     String        // e.g. "8.75% p.a." atau "Nisbah 60:40 (Eq. 6.25%)"
+  saldoMinimal   String?       // e.g. "Rp 1.000.000"
+  keterangan     String?       // e.g. "Review ALCO Q4, Fixed 1 tahun"
+  tanggalBerlaku DateTime      @default(now())
+  urutan         Int           @default(0)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@map("baris_suku_bunga")
+}
